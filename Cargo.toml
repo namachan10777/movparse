@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+    "mp4-derive",
+    "mp4-box",
+    "mp4",
+]
