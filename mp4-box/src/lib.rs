@@ -1,13 +1,33 @@
-use std::{io::Cursor, sync::Arc};
+use std::{
+    fmt::Debug,
+    io::{self, Cursor},
+    sync::Arc,
+};
 
+use byteorder::{ReadBytesExt, BE};
 use tokio::{
-    io::{self, AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, SeekFrom},
+    io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, SeekFrom},
     sync::Mutex,
 };
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct BoxHeader {
     pub id: [u8; 4],
     pub size: u32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct U32Tag {
+    pub raw: [u8; 4],
+}
+
+impl std::fmt::Debug for U32Tag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let utf8 = String::from_utf8_lossy(&self.raw);
+        f.write_fmt(format_args!(
+            "<\"{}\": 0x{:02x}{:02x}{:02x}{:02x}>",
+            utf8, self.raw[3], self.raw[2], self.raw[1], self.raw[0]
+        ))
+    }
 }
 
 impl BoxHeader {
@@ -20,12 +40,27 @@ impl BoxHeader {
         reader.read_exact(&mut size).await?;
         reader.read_exact(&mut id).await?;
 
-        let size = Cursor::new(size).read_u32().await?;
+        let size = ReadBytesExt::read_u32::<BE>(&mut Cursor::new(size)).unwrap();
+        if size < 8 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("{:?}: size must be larger than 8", U32Tag { raw: id }),
+            ));
+        }
         Ok(Self { id, size })
     }
 
     pub fn body_size(&self) -> usize {
         (self.size - 8) as usize
+    }
+}
+
+impl Debug for BoxHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BoxHeader")
+            .field("id", &U32Tag { raw: self.id })
+            .field("size", &self.size)
+            .finish()
     }
 }
 
@@ -62,7 +97,7 @@ impl<R: AsyncRead + Unpin + Send + AsyncSeek> Reader<R> {
             if self.pos + size as u64 > limit {
                 return Err(io::Error::new(
                     io::ErrorKind::OutOfMemory,
-                    format!("pos: {} over the limit {}", self.pos, limit),
+                    format!("pos: {} over the limit {}", self.pos + size as u64, limit),
                 ));
             }
         }
@@ -134,6 +169,41 @@ impl<const N: usize> AttrRead for [u8; N] {
 }
 
 #[async_trait::async_trait]
+impl AttrRead for u8 {
+    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        reader: &mut Reader<R>,
+    ) -> io::Result<Self> {
+        let mut buf = [0u8; 1];
+        reader.read_exact(&mut buf[..]).await?;
+        Ok(buf[0])
+    }
+}
+
+#[async_trait::async_trait]
+impl AttrRead for u16 {
+    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        reader: &mut Reader<R>,
+    ) -> io::Result<Self> {
+        let mut buf = [0u8; 2];
+        reader.read_exact(&mut buf[..]).await?;
+        let mut buf = io::Cursor::new(buf);
+        Ok(ReadBytesExt::read_u16::<BE>(&mut buf).unwrap())
+    }
+}
+
+#[async_trait::async_trait]
+impl AttrRead for u32 {
+    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        reader: &mut Reader<R>,
+    ) -> io::Result<Self> {
+        let mut buf = [0u8; 4];
+        reader.read_exact(&mut buf[..]).await?;
+        let mut buf = io::Cursor::new(buf);
+        Ok(ReadBytesExt::read_u32::<BE>(&mut buf).unwrap())
+    }
+}
+
+#[async_trait::async_trait]
 impl<T: AttrRead + Send> AttrRead for Vec<T> {
     async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
         reader: &mut Reader<R>,
@@ -155,6 +225,16 @@ impl<T: AttrRead + Send> AttrRead for Vec<T> {
                 }
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl AttrRead for U32Tag {
+    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        reader: &mut Reader<R>,
+    ) -> io::Result<Self> {
+        let raw: [u8; 4] = AttrRead::read(reader).await?;
+        Ok(Self { raw })
     }
 }
 
