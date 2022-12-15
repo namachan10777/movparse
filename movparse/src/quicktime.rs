@@ -1,3 +1,4 @@
+//! Parser implementation for Apple QuickTime format based on [apple document](https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap2/qtff2.html)
 use std::io;
 
 use movparse_box::{AttrRead, BoxHeader, RawString, Reader, U32Tag};

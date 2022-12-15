@@ -128,7 +128,9 @@ mod test {
 
         let ftyp_src = Cursor::new(ftyp.clone());
         let mut ftyp_reader = movparse_box::Reader::new(ftyp_src, ftyp.len() as u64);
-        let ftyp_header = movparse_box::BoxHeader::read(&mut ftyp_reader).await.unwrap();
+        let ftyp_header = movparse_box::BoxHeader::read(&mut ftyp_reader)
+            .await
+            .unwrap();
         ftyp_reader.set_limit(ftyp_header.body_size() as u64);
         let ftyp_body: Ftyp = movparse_box::BoxRead::read_body(ftyp_header, &mut ftyp_reader)
             .await

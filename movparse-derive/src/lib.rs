@@ -475,7 +475,7 @@ fn gen_read_leaf_enum(name: &Ident, enm: &syn::DataEnum) -> Result<TokenStream, 
             fn acceptable_tag(tag: [u8;4]) -> bool {
                 #acceptable_tag.contains(&tag)
             }
-            
+
             async fn read_body<R: ::tokio::io::AsyncRead + ::tokio::io::AsyncSeek + ::std::marker::Unpin + ::std::marker::Send>(
                 header: ::movparse_box::BoxHeader,
                 reader: &mut ::movparse_box::Reader<R>,
