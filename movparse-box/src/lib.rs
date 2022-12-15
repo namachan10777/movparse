@@ -4,20 +4,81 @@ use std::{
     sync::Arc,
 };
 
+pub mod util;
+
 use byteorder::{ReadBytesExt, BE};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, SeekFrom},
     sync::Mutex,
 };
+
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct BoxHeader {
     pub id: [u8; 4],
     pub size: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct U32Tag {
     pub raw: [u8; 4],
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct RawString {
+    raw: Vec<u8>,
+    str: String,
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for RawString {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.str)
+    }
+}
+
+#[cfg(feature = "serde")]
+struct RawStringVisitor;
+
+#[cfg(feature = "serde")]
+impl<'de> serde::de::Visitor<'de> for RawStringVisitor {
+    type Value = RawString;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("RawString accept only string type")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(RawString {
+            str: v.to_owned(),
+            raw: v.as_bytes().to_vec(),
+        })
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for RawString {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(RawStringVisitor)
+    }
+}
+
+impl std::fmt::Debug for RawString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.str.fmt(f)
+    }
 }
 
 impl std::fmt::Debug for U32Tag {
@@ -129,22 +190,55 @@ impl<R: AsyncRead + Unpin + Send + AsyncSeek> Reader<R> {
         self.limit = None;
     }
 
-    pub fn remain(&self) -> u64 {
-        self.limit.map(|limit| limit - self.pos).unwrap_or(u64::MAX)
+    pub fn remain(&self) -> i64 {
+        self.limit
+            .map(|limit| limit as i64 - self.pos as i64)
+            .unwrap_or(i64::MAX)
     }
 }
 
 #[async_trait::async_trait]
 pub trait AttrRead: Sized {
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
         reader: &mut Reader<R>,
     ) -> io::Result<Self>;
 }
 
 #[async_trait::async_trait]
+impl AttrRead for RawString {
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        reader: &mut Reader<R>,
+    ) -> io::Result<Self> {
+        let mut buf = Vec::new();
+        buf.resize(reader.remain() as usize, 0);
+        reader.read_exact(&mut buf).await?;
+        let str = String::from_utf8_lossy(&buf).to_string();
+        Ok(Self { raw: buf, str })
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: BoxRead> AttrRead for T {
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        reader: &mut Reader<R>,
+    ) -> io::Result<Self> {
+        let header = BoxHeader::read(reader).await?;
+        if Self::acceptable_tag(header.id) {
+            BoxRead::read_body(header, reader).await
+        } else {
+            let u32tag = U32Tag { raw: header.id };
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("{:?} is not acceptable for me", u32tag),
+            ))
+        }
+    }
+}
+
+#[async_trait::async_trait]
 pub trait BoxRead: Sized {
     fn acceptable_tag(tag: [u8; 4]) -> bool;
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_body<R: AsyncRead + AsyncSeek + Unpin + Send>(
         header: BoxHeader,
         reader: &mut Reader<R>,
     ) -> io::Result<Self>;
@@ -159,7 +253,7 @@ pub trait RootRead: Sized {
 
 #[async_trait::async_trait]
 impl<const N: usize> AttrRead for [u8; N] {
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
         reader: &mut Reader<R>,
     ) -> io::Result<Self> {
         let mut buf = [0u8; N];
@@ -170,7 +264,7 @@ impl<const N: usize> AttrRead for [u8; N] {
 
 #[async_trait::async_trait]
 impl AttrRead for u8 {
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
         reader: &mut Reader<R>,
     ) -> io::Result<Self> {
         let mut buf = [0u8; 1];
@@ -181,7 +275,7 @@ impl AttrRead for u8 {
 
 #[async_trait::async_trait]
 impl AttrRead for u16 {
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
         reader: &mut Reader<R>,
     ) -> io::Result<Self> {
         let mut buf = [0u8; 2];
@@ -193,7 +287,7 @@ impl AttrRead for u16 {
 
 #[async_trait::async_trait]
 impl AttrRead for u32 {
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
         reader: &mut Reader<R>,
     ) -> io::Result<Self> {
         let mut buf = [0u8; 4];
@@ -205,12 +299,12 @@ impl AttrRead for u32 {
 
 #[async_trait::async_trait]
 impl<T: AttrRead + Send> AttrRead for Vec<T> {
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
         reader: &mut Reader<R>,
     ) -> io::Result<Self> {
         let mut buf = Vec::new();
         loop {
-            match T::read(reader).await {
+            match T::read_attr(reader).await {
                 Ok(t) => {
                     buf.push(t);
                     if reader.remain() == 0 {
@@ -230,10 +324,10 @@ impl<T: AttrRead + Send> AttrRead for Vec<T> {
 
 #[async_trait::async_trait]
 impl AttrRead for U32Tag {
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
         reader: &mut Reader<R>,
     ) -> io::Result<Self> {
-        let raw: [u8; 4] = AttrRead::read(reader).await?;
+        let raw: [u8; 4] = AttrRead::read_attr(reader).await?;
         Ok(Self { raw })
     }
 }
@@ -242,9 +336,9 @@ impl AttrRead for U32Tag {
 pub trait BoxPlaceholder<T: BoxRead> {
     type Output;
     fn push(&mut self, value: T) -> io::Result<()>;
-    fn get(self) -> io::Result<Self::Output>;
+    fn get(self, name: &str) -> io::Result<Self::Output>;
     fn acceptable_tag(&self, tag: [u8; 4]) -> bool;
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_body<R: AsyncRead + AsyncSeek + Unpin + Send>(
         &self,
         header: BoxHeader,
         reader: &mut Reader<R>,
@@ -267,12 +361,12 @@ impl<T: BoxRead + Sync> BoxPlaceholder<T> for SingleBoxPlaceholder<T> {
         T::acceptable_tag(tag)
     }
 
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_body<R: AsyncRead + AsyncSeek + Unpin + Send>(
         &self,
         header: BoxHeader,
         reader: &mut Reader<R>,
     ) -> io::Result<T> {
-        T::read(header, reader).await
+        T::read_body(header, reader).await
     }
 
     fn push(&mut self, value: T) -> io::Result<()> {
@@ -283,10 +377,13 @@ impl<T: BoxRead + Sync> BoxPlaceholder<T> for SingleBoxPlaceholder<T> {
         Ok(())
     }
 
-    fn get(self) -> io::Result<Self::Output> {
+    fn get(self, name: &str) -> io::Result<Self::Output> {
         match self.inner {
             Some(inner) => Ok(inner),
-            None => Err(io::Error::new(io::ErrorKind::NotFound, "was not inserted")),
+            None => Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("field {} was not inserted", name),
+            )),
         }
     }
 }
@@ -299,18 +396,18 @@ impl<T: BoxRead + Sync> BoxPlaceholder<T> for Option<T> {
         T::acceptable_tag(tag)
     }
 
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_body<R: AsyncRead + AsyncSeek + Unpin + Send>(
         &self,
         header: BoxHeader,
         reader: &mut Reader<R>,
     ) -> io::Result<T> {
-        T::read(header, reader).await
+        T::read_body(header, reader).await
     }
     fn push(&mut self, value: T) -> io::Result<()> {
         *self = Some(value);
         Ok(())
     }
-    fn get(self) -> io::Result<Self::Output> {
+    fn get(self, _: &str) -> io::Result<Self::Output> {
         Ok(self)
     }
 }
@@ -323,18 +420,18 @@ impl<T: BoxRead + Sync> BoxPlaceholder<T> for Vec<T> {
         T::acceptable_tag(tag)
     }
 
-    async fn read<R: AsyncRead + AsyncSeek + Unpin + Send>(
+    async fn read_body<R: AsyncRead + AsyncSeek + Unpin + Send>(
         &self,
         header: BoxHeader,
         reader: &mut Reader<R>,
     ) -> io::Result<T> {
-        T::read(header, reader).await
+        T::read_body(header, reader).await
     }
     fn push(&mut self, value: T) -> io::Result<()> {
         self.push(value);
         Ok(())
     }
-    fn get(self) -> io::Result<Self::Output> {
+    fn get(self, _: &str) -> io::Result<Self::Output> {
         Ok(self)
     }
 }
@@ -370,11 +467,11 @@ mod test {
         let limit = src.len() as u64;
         let reader = io::Cursor::new(src);
         let mut reader = Reader::new(reader, limit);
-        let target: [u8; 3] = AttrRead::read(&mut reader).await.unwrap();
+        let target: [u8; 3] = AttrRead::read_attr(&mut reader).await.unwrap();
         assert_eq!(target, [0, 1, 2]);
         assert_eq!(reader.pos, 3);
         assert_eq!(reader.limit, Some(5));
-        let target: [u8; 2] = AttrRead::read(&mut reader).await.unwrap();
+        let target: [u8; 2] = AttrRead::read_attr(&mut reader).await.unwrap();
         assert_eq!(target, [3, 4]);
         assert_eq!(reader.pos, 5);
         assert_eq!(reader.limit, Some(5));
@@ -387,10 +484,10 @@ mod test {
         let reader = io::Cursor::new(src);
         let mut reader = Reader::new(reader, limit);
         reader.set_limit(2);
-        assert!(<[u8; 3]>::read(&mut reader).await.is_err());
-        assert_eq!(<[u8; 2]>::read(&mut reader).await.unwrap(), [0, 1]);
+        assert!(<[u8; 3]>::read_attr(&mut reader).await.is_err());
+        assert_eq!(<[u8; 2]>::read_attr(&mut reader).await.unwrap(), [0, 1]);
         reader.clear_limit();
-        assert_eq!(<[u8; 2]>::read(&mut reader).await.unwrap(), [2, 3]);
+        assert_eq!(<[u8; 2]>::read_attr(&mut reader).await.unwrap(), [2, 3]);
     }
 
     #[tokio::test]
@@ -399,8 +496,8 @@ mod test {
         let limit = src.len() as u64;
         let reader = io::Cursor::new(src);
         let mut reader = Reader::new(reader, limit);
-        assert_eq!(<[u8; 2]>::read(&mut reader).await.unwrap(), [0, 1]);
-        assert_eq!(<[u8; 2]>::read(&mut reader).await.unwrap(), [2, 3]);
+        assert_eq!(<[u8; 2]>::read_attr(&mut reader).await.unwrap(), [0, 1]);
+        assert_eq!(<[u8; 2]>::read_attr(&mut reader).await.unwrap(), [2, 3]);
     }
 
     #[tokio::test]
@@ -409,10 +506,10 @@ mod test {
         let limit = src.len() as u64;
         let reader = io::Cursor::new(src);
         let mut reader = Reader::new(reader, limit);
-        assert_eq!(<[u8; 2]>::read(&mut reader).await.unwrap(), [0, 1]);
+        assert_eq!(<[u8; 2]>::read_attr(&mut reader).await.unwrap(), [0, 1]);
         let mut reader2 = reader.clone();
-        assert_eq!(<[u8; 2]>::read(&mut reader).await.unwrap(), [2, 3]);
-        assert_eq!(<[u8; 3]>::read(&mut reader2).await.unwrap(), [2, 3, 4]);
+        assert_eq!(<[u8; 2]>::read_attr(&mut reader).await.unwrap(), [2, 3]);
+        assert_eq!(<[u8; 3]>::read_attr(&mut reader2).await.unwrap(), [2, 3, 4]);
     }
 
     #[tokio::test]
@@ -423,7 +520,7 @@ mod test {
         let mut reader = Reader::new(reader, limit);
         reader.set_limit(4);
         assert_eq!(
-            Vec::<[u8; 2]>::read(&mut reader).await.unwrap(),
+            Vec::<[u8; 2]>::read_attr(&mut reader).await.unwrap(),
             vec![[0, 1], [2, 3]]
         );
     }

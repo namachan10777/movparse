@@ -1,0 +1,25 @@
+[package]
+edition = "2021"
+name = "movparse-box"
+version = "0.1.0"
+
+[lib]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["tracing", "serde"]
+tracing = ["dep:tracing"]
+serde = ["dep:serde"]
+
+[dependencies]
+async-trait = "0.1"
+byteorder = "1"
+thiserror = "1"
+tokio = {version = "1", features = ["io-util", "sync"]}
+tracing = {version = "0.1.37", optional = true}
+serde = { version = "1", optional = true, features = ["derive"]}
+
+[dev-dependencies]
+anyhow = "1.0.66"
+tokio = {version = "1", features = ["io-util", "sync", "macros", "rt-multi-thread"]}

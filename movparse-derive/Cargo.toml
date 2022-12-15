@@ -1,5 +1,5 @@
 [package]
-name = "mp4-derive"
+name = "movparse-derive"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,13 +8,18 @@ proc-macro = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+tracing = ["dep:tracing", "movparse-box/tracing"]
+
 [dependencies]
 async-trait = "0.1.59"
 proc-macro2 = "1.0.47"
 quote = "1.0.21"
 syn = {version="1.0.105", features=["full", "extra-traits"]}
 tokio = { version = "1.23.0", features = ["io-util", "fs", "rt-multi-thread", "macros"] }
-mp4-box = { path = "../mp4-box" }
+movparse-box = { path = "../movparse-box" }
+tracing = {version = "0.1.37", optional = true}
+itertools = "0.10.5"
 
 [dev-dependencies]
 async-trait = "0.1.59"

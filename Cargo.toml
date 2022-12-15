@@ -1,7 +1,7 @@
 [workspace]
 
 members = [
-    "mp4-derive",
-    "mp4-box",
-    "mp4",
+    "movparse-derive",
+    "movparse-box",
+    "movparse",
 ]

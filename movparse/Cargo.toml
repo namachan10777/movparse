@@ -1,0 +1,23 @@
+[package]
+edition = "2021"
+name = "movparse"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+tracing = ["dep:tracing", "movparse-box/tracing", "movparse-derive/tracing"]
+
+[dependencies]
+async-trait = "0.1.59"
+movparse-box = {path = "../movparse-box"}
+movparse-derive = {path = "../movparse-derive"}
+serde = { version = "1.0.150", features = ["derive"] }
+tokio = {version = "1.23.0", features = ["io-util"]}
+tracing = {version = "0.1.37", optional = true}
+tracing-subscriber = {version = "0.3.16", features = ["env-filter"]}
+
+[dev-dependencies]
+anyhow = "1.0.66"
+serde_json = "1.0.89"
+clap = {version = "4.0.29", features = ["derive"]}

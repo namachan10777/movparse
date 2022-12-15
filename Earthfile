@@ -9,14 +9,15 @@ RUN wget https://download.samplelib.com/mp4/sample-5s.mp4
 
 recipe:
     COPY Cargo.* .
-    COPY mp4/src mp4/src
-    COPY mp4/Cargo.* mp4/
-    COPY mp4-box/src mp4-box/src
-    COPY mp4-box/tests mp4-box/tests
-    COPY mp4-box/Cargo.* mp4-box/
-    COPY mp4-derive/src mp4-derive/src
-    COPY mp4-derive/tests mp4-derive/tests
-    COPY mp4-derive/Cargo.* mp4-derive/
+    COPY movparse/src movparse/src
+    COPY movparse/Cargo.* movparse/
+    COPY movparse-box/src movparse-box/src
+    COPY movparse-box/tests movparse-box/tests
+    COPY movparse-box/Cargo.* movparse-box/
+    COPY movparse-derive/src movparse-derive/src
+    COPY movparse-derive/tests movparse-derive/tests
+    COPY movparse-derive/Cargo.* movparse-derive/
+    COPY README.md .
     RUN cargo chef prepare --recipe-path recipe.json
     SAVE ARTIFACT recipe.json /recipe.json
 
@@ -25,27 +26,31 @@ prepare-debug:
     RUN cargo chef cook --recipe-path recipe.json
     RUN cargo check
     COPY Cargo.* .
-    COPY mp4/src mp4/src
-    COPY mp4/Cargo.* mp4/
-    COPY mp4-box/src mp4-box/src
-    COPY mp4-box/tests mp4-box/tests
-    COPY mp4-box/Cargo.* mp4-box/
-    COPY mp4-derive/src mp4-derive/src
-    COPY mp4-derive/tests mp4-derive/tests
-    COPY mp4-derive/Cargo.* mp4-derive/
+    COPY movparse/src movparse/src
+    COPY movparse/Cargo.* movparse/
+    COPY movparse-box/src movparse-box/src
+    COPY movparse-box/tests movparse-box/tests
+    COPY movparse-box/Cargo.* movparse-box/
+    COPY movparse-derive/src movparse-derive/src
+    COPY movparse-derive/tests movparse-derive/tests
+    COPY movparse-derive/Cargo.* movparse-derive/
+    COPY README.md .
 
 prepare-release:
     COPY +recipe/recipe.json .
     RUN cargo chef cook --recipe-path recipe.json
+    RUN cargo doc
     COPY Cargo.* .
-    COPY mp4/src mp4/src
-    COPY mp4/Cargo.* mp4/
-    COPY mp4-box/src mp4-box/src
-    COPY mp4-box/tests mp4-box/tests
-    COPY mp4-box/Cargo.* mp4-box/
-    COPY mp4-derive/src mp4-derive/src
-    COPY mp4-derive/tests mp4-derive/tests
-    COPY mp4-derive/Cargo.* mp4-derive/
+    COPY movparse/src movparse/src
+    COPY movparse/Cargo.* movparse/
+    COPY movparse-box/src movparse-box/src
+    COPY movparse-box/tests movparse-box/tests
+    COPY movparse-box/Cargo.* movparse-box/
+    COPY movparse-derive/src movparse-derive/src
+    COPY movparse-derive/tests movparse-derive/tests
+    COPY movparse-derive/Cargo.* movparse-derive/
+    COPY README.md .
+    RUN cargo doc
 
 test:
     FROM +prepare-debug

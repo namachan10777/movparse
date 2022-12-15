@@ -1,38 +1,98 @@
-use mp4_box::BoxHeader;
-use mp4_derive::BoxRead;
+use movparse_box::*;
+use tokio::io::{self, AsyncRead, AsyncSeek};
 
-#[derive(BoxRead, Debug, PartialEq, Eq)]
-#[mp4(boxtype = "leaf")]
-#[mp4(tag = "ftyp")]
-struct Ftyp {
-    #[mp4(header)]
+#[derive(Debug, PartialEq, Eq)]
+pub struct Ftyp {
     pub header: BoxHeader,
     pub major_brand: [u8; 4],
     pub minor_version: [u8; 4],
     pub compatible_brands: Vec<[u8; 4]>,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq)]
-#[mp4(boxtype = "leaf")]
-#[mp4(tag = "data")]
+#[async_trait::async_trait]
+impl movparse_box::BoxRead for Ftyp {
+    fn acceptable_tag(tag: [u8; 4]) -> bool {
+        tag == [b'f', b't', b'y', b'p']
+    }
+    async fn read_body<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        header: BoxHeader,
+        reader: &mut Reader<R>,
+    ) -> io::Result<Self> {
+        let mut reader2 = reader.clone();
+        reader2.set_limit(header.body_size() as u64);
+        let major_brand = AttrRead::read_attr(&mut reader2).await?;
+        let minor_version = AttrRead::read_attr(&mut reader2).await?;
+        let compatible_brands = AttrRead::read_attr(&mut reader2).await?;
+        reader.seek_from_current(header.body_size() as i64).await?;
+        Ok(Self {
+            header,
+            major_brand,
+            minor_version,
+            compatible_brands,
+        })
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 struct Data {
-    #[mp4(header)]
     header: BoxHeader,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq)]
-#[mp4(boxtype = "internal")]
-#[mp4(tag = "test")]
+#[async_trait::async_trait]
+impl movparse_box::BoxRead for Data {
+    fn acceptable_tag(tag: [u8; 4]) -> bool {
+        tag == [b'd', b'a', b't', b'a']
+    }
+    async fn read_body<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        header: BoxHeader,
+        reader: &mut Reader<R>,
+    ) -> io::Result<Self> {
+        reader.seek_from_current(header.body_size() as i64).await?;
+        Ok(Self { header })
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 struct Test {
-    #[mp4(header)]
     header: BoxHeader,
     ftyp: Ftyp,
     data: Vec<Data>,
 }
 
+#[async_trait::async_trait]
+impl movparse_box::BoxRead for Test {
+    fn acceptable_tag(tag: [u8; 4]) -> bool {
+        tag == [b't', b'e', b's', b't']
+    }
+    async fn read_body<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        header: BoxHeader,
+        reader: &mut Reader<R>,
+    ) -> io::Result<Self> {
+        let mut reader2 = reader.clone();
+        reader2.set_limit(header.body_size() as u64);
+        let mut ftyp = Ftyp::placeholder();
+        let mut data = Vec::<Data>::placeholder();
+        while reader2.remain() > 0 {
+            let header = BoxHeader::read(&mut reader2).await?;
+            if ftyp.acceptable_tag(header.id) {
+                let ftyp_value = ftyp.read_body(header, &mut reader2).await?;
+                BoxPlaceholder::push(&mut ftyp, ftyp_value)?;
+            } else if data.acceptable_tag(header.id) {
+                let data_value = data.read_body(header, &mut reader2).await?;
+                BoxPlaceholder::push(&mut data, data_value)?;
+            }
+        }
+        reader.seek_from_current(header.body_size() as i64).await?;
+        Ok(Self {
+            header,
+            ftyp: ftyp.get("ftyp")?,
+            data: data.get("data")?,
+        })
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use mp4_box::*;
     use std::io::Cursor;
 
     use tokio::io::AsyncWriteExt;
@@ -67,10 +127,10 @@ mod test {
         ftyp.write_all(&compatible_brands).await.unwrap();
 
         let ftyp_src = Cursor::new(ftyp.clone());
-        let mut ftyp_reader = mp4_box::Reader::new(ftyp_src, ftyp.len() as u64);
-        let ftyp_header = mp4_box::BoxHeader::read(&mut ftyp_reader).await.unwrap();
+        let mut ftyp_reader = movparse_box::Reader::new(ftyp_src, ftyp.len() as u64);
+        let ftyp_header = movparse_box::BoxHeader::read(&mut ftyp_reader).await.unwrap();
         ftyp_reader.set_limit(ftyp_header.body_size() as u64);
-        let ftyp_body: Ftyp = mp4_box::BoxRead::read(ftyp_header, &mut ftyp_reader)
+        let ftyp_body: Ftyp = movparse_box::BoxRead::read_body(ftyp_header, &mut ftyp_reader)
             .await
             .unwrap();
         assert_eq!(
@@ -108,7 +168,7 @@ mod test {
         let test_src = Cursor::new(test.clone());
         let mut reader = Reader::new(test_src, test.len() as u64);
         let test_header = BoxHeader::read(&mut reader).await.unwrap();
-        let test_body = Test::read(test_header, &mut reader).await.unwrap();
+        let test_body = Test::read_body(test_header, &mut reader).await.unwrap();
         assert_eq!(
             test_body,
             Test {
