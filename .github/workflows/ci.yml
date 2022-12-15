@@ -12,6 +12,8 @@ jobs:
       - uses: ./.github/actions/cache_cargo
       - name: build
         run: cargo build
+      - name: Download sample file
+        run: wget https://download.samplelib.com/mp4/sample-5s.mp4
 
   fmt:
     runs-on: ubuntu-latest
