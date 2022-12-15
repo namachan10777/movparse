@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use movparse::{Reader, RootRead};
 use tokio::fs;
+use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Parser)]
 struct Opts {
@@ -11,6 +12,10 @@ struct Opts {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(tracing_subscriber::fmt::layer())
+        .init();
     let opts = Opts::parse();
     let file = fs::File::open(opts.file).await?;
     let limit = file.metadata().await?.len();

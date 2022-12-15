@@ -108,6 +108,19 @@ impl BoxHeader {
                 format!("{:?}: size must be larger than 8", U32Tag { raw: id }),
             ));
         }
+        #[cfg(feature = "tracing")]
+        {
+            let id_str_repr = String::from_utf8_lossy(&id);
+            tracing::debug!(
+                "<{:?}: 0x{}{}{}{}> with size {} bytes",
+                id_str_repr,
+                id[3],
+                id[2],
+                id[1],
+                id[0],
+                size
+            );
+        }
         Ok(Self { id, size })
     }
 
@@ -154,12 +167,33 @@ impl<R: AsyncRead + Unpin + Send + AsyncSeek> Reader<R> {
         let mut inner = self.inner.lock().await;
         inner.seek(SeekFrom::Start(self.pos)).await?;
         let size = inner.read_exact(buf).await?;
+
         if let Some(limit) = self.limit {
+            #[cfg(feature = "tracing")]
+            {
+                tracing::trace!(
+                    "read {} bytes from {}. next position: {}, limit: {}",
+                    size,
+                    self.pos,
+                    self.pos + size as u64,
+                    limit
+                );
+            }
             if self.pos + size as u64 > limit {
                 return Err(io::Error::new(
                     io::ErrorKind::OutOfMemory,
                     format!("pos: {} over the limit {}", self.pos + size as u64, limit),
                 ));
+            }
+        } else {
+            #[cfg(feature = "tracing")]
+            {
+                tracing::trace!(
+                    "read {} bytes from {}. next position: {}",
+                    size,
+                    self.pos - size as u64,
+                    self.pos
+                );
             }
         }
         self.pos += size as u64;
@@ -171,6 +205,10 @@ impl<R: AsyncRead + Unpin + Send + AsyncSeek> Reader<R> {
     }
 
     pub async fn seek_from_current(&mut self, seek: i64) -> io::Result<()> {
+        #[cfg(feature = "tracing")]
+        {
+            tracing::trace!("seek {} to {}", self.pos, self.pos as i64 + seek,);
+        }
         self.inner
             .lock()
             .await
@@ -181,6 +219,10 @@ impl<R: AsyncRead + Unpin + Send + AsyncSeek> Reader<R> {
     }
 
     pub async fn seek_from_start(&mut self, seek: u64) -> io::Result<()> {
+        #[cfg(feature = "tracing")]
+        {
+            tracing::trace!("seek {} to {}", self.pos, seek,);
+        }
         self.inner.lock().await.seek(SeekFrom::Start(seek)).await?;
         self.pos = seek;
         Ok(())
