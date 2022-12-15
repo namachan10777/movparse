@@ -228,7 +228,7 @@ fn canonicalize_ty(ty: &Type) -> TokenStream2 {
 
 fn parse_fields(fields: &Fields, span: Span) -> Result<FieldsInfo, syn::Error> {
     let Some(field_sample) = fields.iter().next() else {
-        return Err(syn::Error::new(span, format!("movparse-derive requires C-style struct or tuple struct.")));
+        return Err(syn::Error::new(span, "movparse-derive requires C-style struct or tuple struct.".to_owned()));
     };
     if field_sample.ident.is_some() {
         let (headers, fields): (Vec<_>, Vec<_>) =
@@ -236,7 +236,7 @@ fn parse_fields(fields: &Fields, span: Span) -> Result<FieldsInfo, syn::Error> {
                 let Some(field_name) = field.ident.as_ref()else {
                 return Either::Right(Err(syn::Error::new_spanned(
                     field.to_token_stream(),
-                    format!("unexpected nameless field"),
+                    "unexpected nameless field".to_owned(),
                 )))
             };
                 let attrs = match parse_mp4_attrs(&field.attrs) {
@@ -262,7 +262,7 @@ fn parse_fields(fields: &Fields, span: Span) -> Result<FieldsInfo, syn::Error> {
         if headers.len() > 1 {
             return Err(syn::Error::new(
                 span,
-                format!("#[movparse(header)] attribute must be one"),
+                "#[movparse(header)] attribute must be one".to_owned(),
             ));
         }
         let header = headers.into_iter().next();
@@ -304,7 +304,7 @@ fn parse_fields(fields: &Fields, span: Span) -> Result<FieldsInfo, syn::Error> {
         {
             return Err(syn::Error::new(
                 span,
-                format!("#[movparse(header)] attribute must be one"),
+                "#[movparse(header)] attribute must be one".to_owned(),
             ));
         }
         Ok(FieldsInfo::Tuple { fields })
@@ -546,7 +546,7 @@ struct InternalCodeFlakes {
 }
 
 fn gen_code_flakes_for_internal_from_struct(
-    fields: &Vec<StructFieldInfo>,
+    fields: &[StructFieldInfo],
 ) -> syn::Result<InternalCodeFlakes> {
     let box_parsers = fields
         .iter()
@@ -584,7 +584,7 @@ fn gen_code_flakes_for_internal_from_struct(
 }
 
 fn gen_code_flakes_for_internal_from_tuple(
-    fields: &Vec<TupleFieldInfo>,
+    fields: &[TupleFieldInfo],
 ) -> syn::Result<InternalCodeFlakes> {
     let box_parsers = fields
         .iter()
@@ -630,7 +630,7 @@ fn gen_read_internal_struct_inner(
     fields: &Fields,
     span: Span,
 ) -> Result<TokenStream2, syn::Error> {
-    let fields_info = parse_fields(&fields, fields.span())?;
+    let fields_info = parse_fields(fields, fields.span())?;
     let (placeholders, parsers, struct_return) = match fields_info {
         FieldsInfo::Struct {
             header_name,
@@ -639,7 +639,7 @@ fn gen_read_internal_struct_inner(
             let header_name = header_name.ok_or_else(|| {
                 syn::Error::new(
                     span,
-                    format!("boxtype = \"internal\" requires one #[movparse(header)]"),
+                    "boxtype = \"internal\" requires one #[movparse(header)]".to_owned(),
                 )
             })?;
             let internal_code_flakes = gen_code_flakes_for_internal_from_struct(&fields)?;

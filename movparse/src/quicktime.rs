@@ -2,8 +2,8 @@ use std::io;
 
 use movparse_box::{AttrRead, BoxHeader, RawString, Reader, U32Tag};
 use movparse_derive::{BoxRead, RootRead};
+use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncSeek};
-use serde::{Serialize, Deserialize};
 
 #[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]

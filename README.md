@@ -2,7 +2,7 @@
 
 Derive-macro base async-aware mp4 family (`quicktime`, `mp4` and more) parser.
 
-```rust
+```rust, no_run
 use std::path::PathBuf;
 use clap::Parser;
 use movparse::{Reader, RootRead, BoxRead, U32Tag, BoxHeader};

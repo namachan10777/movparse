@@ -27,9 +27,8 @@ pub mod serde {
                 where
                     A: serde::de::SeqAccess<'de>, {
                 let mut value = [0u8;N];
-                for i in 0..N {
-                    let elem = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(N, &self))?;
-                    value[i] = elem;
+                for elem in value.iter_mut() {
+                    *elem = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(N, &self))?;
                 }
                 Ok(value)
             }
