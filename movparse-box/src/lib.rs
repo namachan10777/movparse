@@ -139,9 +139,9 @@ impl Debug for BoxHeader {
 }
 
 pub struct Reader<R: AsyncRead + AsyncSeek + Unpin + Send> {
-    inner: Arc<Mutex<R>>,
-    pos: u64,
-    limit: Option<u64>,
+    pub inner: Arc<Mutex<R>>,
+    pub pos: u64,
+    pub limit: Option<u64>,
 }
 
 impl<R: AsyncRead + AsyncSeek + Unpin + Send> Clone for Reader<R> {

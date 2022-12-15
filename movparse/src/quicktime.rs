@@ -1,7 +1,7 @@
 //! Parser implementation for Apple QuickTime format based on [apple document](https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap2/qtff2.html)
-use std::io;
+use std::{io, time::Duration};
 
-use movparse_box::{AttrRead, BoxHeader, RawString, Reader, U32Tag};
+use movparse_box::{AttrRead, BoxHeader, BoxRead, RawString, Reader, U32Tag};
 use movparse_derive::{BoxRead, RootRead};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncSeek};
@@ -17,10 +17,64 @@ pub struct Ftyp {
     pub compatible_brands: Vec<U32Tag>,
 }
 
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Mdat {
+    header: BoxHeader,
+    pos: u64,
+}
+
+impl Mdat {
+    pub async fn read_exact<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        &self,
+        reader: &mut Reader<R>,
+        offset: u64,
+        buf: &mut [u8],
+    ) -> io::Result<()> {
+        reader.seek_from_start(self.pos + offset).await?;
+        reader.read_exact(buf).await?;
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl BoxRead for Mdat {
+    fn acceptable_tag(tag: [u8; 4]) -> bool {
+        tag == [b'm', b'd', b'a', b't']
+    }
+
+    async fn read_body<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        header: BoxHeader,
+        reader: &mut Reader<R>,
+    ) -> Result<Self, io::Error> {
+        let pos = reader.pos;
+        reader.seek_from_current(header.body_size() as i64).await?;
+        Ok(Self { header, pos })
+    }
+}
+
 #[derive(RootRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuickTime {
     pub ftyp: Ftyp,
     pub moov: Moov,
+    pub mdat: Mdat,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Timescale(u32);
+
+#[async_trait::async_trait]
+impl AttrRead for Timescale {
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        reader: &mut Reader<R>,
+    ) -> io::Result<Self> {
+        Ok(Self(u32::read_attr(reader).await?))
+    }
+}
+
+impl Timescale {
+    pub fn decode_duration(&self, dur: u32) -> Duration {
+        Duration::from_secs(dur as u64) / self.0
+    }
 }
 
 #[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,7 +88,7 @@ pub struct Mvhd {
     pub flags: [u8; 3],
     pub creation_time: u32,
     pub modification_time: u32,
-    pub time_scale: u32,
+    pub time_scale: Timescale,
     pub duration: u32,
     pub preferred_rate: u32,
     pub preferred_volume: u16,
@@ -75,12 +129,48 @@ pub struct Tkhd {
     pub track_height: u32,
 }
 
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Edit {
+    pub track_duration: u32,
+    pub media_time: u32,
+    pub media_rate: u32,
+}
+
+#[async_trait::async_trait]
+impl AttrRead for Edit {
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        reader: &mut Reader<R>,
+    ) -> Result<Self, io::Error> {
+        let track_duration = u32::read_attr(reader).await?;
+        let media_time = u32::read_attr(reader).await?;
+        let media_rate = u32::read_attr(reader).await?;
+        Ok(Self {
+            track_duration,
+            media_rate,
+            media_time,
+        })
+    }
+}
+
+#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[mp4(boxtype = "leaf")]
+#[mp4(tag = "elst")]
+pub struct Elst {
+    #[mp4(header)]
+    pub header: BoxHeader,
+    pub version: u8,
+    pub flags: [u8; 3],
+    pub number_of_entries: u32,
+    pub edit_list: Vec<Edit>,
+}
+
 #[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "internal")]
 #[mp4(tag = "edts")]
 pub struct Edts {
     #[mp4(header)]
     pub header: BoxHeader,
+    pub edit_list: Elst,
 }
 
 #[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,7 +183,7 @@ pub struct Mdhd {
     pub flags: [u8; 3],
     pub creation_time: u32,
     pub modification_time: u32,
-    pub time_scale: u32,
+    pub time_scale: Timescale,
     pub duration: u32,
     pub language: u16,
     pub quality: u16,
@@ -335,7 +425,7 @@ pub struct Stco {
     pub version: u8,
     pub flags: [u8; 3],
     pub number_of_entries: u32,
-    pub sample_offset_table: Vec<u32>,
+    pub chunk_offset_table: Vec<u32>,
 }
 
 #[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -367,6 +457,13 @@ pub struct Stbl {
     pub stco: Stco,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Sample {
+    pub duration: Duration,
+    pub offset: usize,
+    pub size: usize,
+}
+
 #[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "smhd")]
@@ -388,6 +485,79 @@ pub struct Moov {
     pub mvhd: Mvhd,
     pub traks: Vec<Trak>,
     pub udta: Udta,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TrackMetadata {
+    pub samples: Vec<Sample>,
+}
+
+impl TrackMetadata {
+    fn from(trak: &Trak, moov: &Moov) -> Self {
+        let timescale = &trak.mdia.mdhd.time_scale;
+        let chunk_offset_table = &trak.mdia.minf.stbl.stco.chunk_offset_table;
+        let sample_to_chunk_table = &trak.mdia.minf.stbl.stsc.sample_to_chunk_table;
+        let _ = &trak.mdia.minf.stbl.stsd.sample_description_table;
+        let sample_size_table = &trak.mdia.minf.stbl.stsz.sample_size_table;
+        let time_to_sample_table = &trak.mdia.minf.stbl.stts.time_to_sample_table;
+        let mut samples = Vec::new();
+        let sample_len = time_to_sample_table
+            .iter()
+            .fold(0, |sample_len, time_to_sample| {
+                time_to_sample.sample_count + sample_len
+            }) as usize;
+        samples.resize(
+            sample_len,
+            Sample {
+                duration: Duration::from_secs(0),
+                offset: 0,
+                size: 0,
+            },
+        );
+        // set sample durations
+        let mut sample_idx = 0;
+        for time_to_sample in time_to_sample_table {
+            for _ in 0..(time_to_sample.sample_count as usize) {
+                samples[sample_idx].duration =
+                    timescale.decode_duration(time_to_sample.sample_duration);
+                sample_idx += 1;
+            }
+        }
+        // set chunk offset per samples
+        let mut sample_idx = 0;
+        for (sample_to_chunk_idx, sample_to_chunk) in sample_to_chunk_table.iter().enumerate() {
+            let next_chunk_start = sample_to_chunk_table
+                .get(sample_to_chunk_idx + 1)
+                .map(|sample_to_chunk| sample_to_chunk.first_chunk as usize)
+                .unwrap_or_else(|| chunk_offset_table.len());
+            for chunk_offset in
+                &chunk_offset_table[sample_to_chunk.first_chunk as usize..next_chunk_start]
+            {
+                samples[sample_idx].offset = *chunk_offset as usize;
+                sample_idx += 1;
+            }
+        }
+        for (sample_idx, sample_size) in sample_size_table.iter().enumerate() {
+            if sample_idx + 1 < sample_size_table.len() {
+                samples[sample_idx + 1].offset += *sample_size as usize;
+            }
+            samples[sample_idx].size = *sample_size as usize;
+        }
+        TrackMetadata { samples }
+    }
+}
+
+impl Moov {
+    pub fn video_duration(&self) -> Duration {
+        self.mvhd.time_scale.decode_duration(self.mvhd.duration)
+    }
+
+    pub fn tracks(&self) -> Vec<TrackMetadata> {
+        self.traks
+            .iter()
+            .map(|trak| TrackMetadata::from(trak, self))
+            .collect::<Vec<_>>()
+    }
 }
 
 #[cfg(test)]
