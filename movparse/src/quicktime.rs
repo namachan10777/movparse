@@ -526,22 +526,23 @@ impl TrackMetadata {
         // set chunk offset per samples
         let mut sample_idx = 0;
         for (sample_to_chunk_idx, sample_to_chunk) in sample_to_chunk_table.iter().enumerate() {
-            let next_chunk_start = sample_to_chunk_table
+            let first_chunk_idx = sample_to_chunk.first_chunk as usize - 1;
+            let next_chunk_idx = sample_to_chunk_table
                 .get(sample_to_chunk_idx + 1)
-                .map(|sample_to_chunk| sample_to_chunk.first_chunk as usize)
+                .map(|sample_to_chunk| sample_to_chunk.first_chunk as usize - 1)
                 .unwrap_or_else(|| chunk_offset_table.len());
             for chunk_offset in
-                &chunk_offset_table[sample_to_chunk.first_chunk as usize..next_chunk_start]
+                &chunk_offset_table[first_chunk_idx..next_chunk_idx]
             {
-                samples[sample_idx].offset = *chunk_offset as usize;
-                sample_idx += 1;
+                let mut offset_in_chunk = 0;
+                for _ in 0..sample_to_chunk.samples_per_chunk {
+                    println!("sample: {} offset: {}, offset_in_chunk: {}", sample_idx, chunk_offset, offset_in_chunk);
+                    samples[sample_idx].offset = offset_in_chunk + *chunk_offset as usize;
+                    samples[sample_idx].size = sample_size_table[sample_idx] as usize;
+                    offset_in_chunk += sample_size_table[sample_idx] as usize;
+                    sample_idx += 1;
+                }
             }
-        }
-        for (sample_idx, sample_size) in sample_size_table.iter().enumerate() {
-            if sample_idx + 1 < sample_size_table.len() {
-                samples[sample_idx + 1].offset += *sample_size as usize;
-            }
-            samples[sample_idx].size = *sample_size as usize;
         }
         TrackMetadata { samples }
     }
