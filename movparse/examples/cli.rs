@@ -22,6 +22,14 @@ async fn main() -> anyhow::Result<()> {
     let mut reader = Reader::new(file, limit);
     let mp4 = movparse::quicktime::QuickTime::read(&mut reader).await?;
     let json = serde_json::to_string_pretty(&mp4)?;
-    println!("{}", json);
+    //println!("{}", json);
+    for (idx, sample) in mp4.moov.tracks()[0].samples.iter().enumerate() {
+        let mut buf = Vec::new();
+        buf.resize(sample.size, 0);
+        reader.seek_from_start(sample.offset as u64).await?;
+        reader.read_exact(&mut buf).await?;
+        println!("buf: {}: {} from: {}", idx, buf.len(), sample.offset);
+        
+    }
     Ok(())
 }

@@ -1,9 +1,10 @@
 # movparse
 
+**_This library is under development_**
+
 [![CI](https://github.com/namachan10777/movparse/actions/workflows/ci.yml/badge.svg)](https://github.com/namachan10777/movparse/actions/workflows/ci.yml)
 
 Derive-macro base async-aware mp4 family (`quicktime`, `mp4` and more) parser.
-*This library is under development*
 
 ```rust, no_run
 use std::path::PathBuf;
