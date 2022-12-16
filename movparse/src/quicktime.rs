@@ -492,14 +492,14 @@ pub struct TrackMetadata {
     pub samples: Vec<Sample>,
 }
 
-impl TrackMetadata {
-    fn from(trak: &Trak, moov: &Moov) -> Self {
-        let timescale = &trak.mdia.mdhd.time_scale;
-        let chunk_offset_table = &trak.mdia.minf.stbl.stco.chunk_offset_table;
-        let sample_to_chunk_table = &trak.mdia.minf.stbl.stsc.sample_to_chunk_table;
-        let _ = &trak.mdia.minf.stbl.stsd.sample_description_table;
-        let sample_size_table = &trak.mdia.minf.stbl.stsz.sample_size_table;
-        let time_to_sample_table = &trak.mdia.minf.stbl.stts.time_to_sample_table;
+impl Trak {
+    pub fn samples(&self) -> Vec<Sample> {
+        let timescale = &self.mdia.mdhd.time_scale;
+        let chunk_offset_table = &self.mdia.minf.stbl.stco.chunk_offset_table;
+        let sample_to_chunk_table = &self.mdia.minf.stbl.stsc.sample_to_chunk_table;
+        let _ = &self.mdia.minf.stbl.stsd.sample_description_table;
+        let sample_size_table = &self.mdia.minf.stbl.stsz.sample_size_table;
+        let time_to_sample_table = &self.mdia.minf.stbl.stts.time_to_sample_table;
         let mut samples = Vec::new();
         let sample_len = time_to_sample_table
             .iter()
@@ -545,20 +545,13 @@ impl TrackMetadata {
                 }
             }
         }
-        TrackMetadata { samples }
+        samples
     }
 }
 
 impl Moov {
     pub fn video_duration(&self) -> Duration {
         self.mvhd.time_scale.decode_duration(self.mvhd.duration)
-    }
-
-    pub fn tracks(&self) -> Vec<TrackMetadata> {
-        self.traks
-            .iter()
-            .map(|trak| TrackMetadata::from(trak, self))
-            .collect::<Vec<_>>()
     }
 }
 
