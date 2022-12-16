@@ -531,12 +531,13 @@ impl TrackMetadata {
                 .get(sample_to_chunk_idx + 1)
                 .map(|sample_to_chunk| sample_to_chunk.first_chunk as usize - 1)
                 .unwrap_or_else(|| chunk_offset_table.len());
-            for chunk_offset in
-                &chunk_offset_table[first_chunk_idx..next_chunk_idx]
-            {
+            for chunk_offset in &chunk_offset_table[first_chunk_idx..next_chunk_idx] {
                 let mut offset_in_chunk = 0;
                 for _ in 0..sample_to_chunk.samples_per_chunk {
-                    println!("sample: {} offset: {}, offset_in_chunk: {}", sample_idx, chunk_offset, offset_in_chunk);
+                    println!(
+                        "sample: {} offset: {}, offset_in_chunk: {}",
+                        sample_idx, chunk_offset, offset_in_chunk
+                    );
                     samples[sample_idx].offset = offset_in_chunk + *chunk_offset as usize;
                     samples[sample_idx].size = sample_size_table[sample_idx] as usize;
                     offset_in_chunk += sample_size_table[sample_idx] as usize;
