@@ -6,7 +6,7 @@ use movparse_derive::{BoxRead, RootRead};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncSeek};
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "ftyp")]
 pub struct Ftyp {
@@ -17,7 +17,7 @@ pub struct Ftyp {
     pub compatible_brands: Vec<U32Tag>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Mdat {
     header: BoxHeader,
     pos: u64,
@@ -52,14 +52,14 @@ impl BoxRead for Mdat {
     }
 }
 
-#[derive(RootRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, RootRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuickTime {
     pub ftyp: Ftyp,
     pub moov: Moov,
     pub mdat: Mdat,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Timescale(u32);
 
 #[async_trait::async_trait]
@@ -77,7 +77,7 @@ impl Timescale {
     }
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "mvhd")]
 pub struct Mvhd {
@@ -105,7 +105,7 @@ pub struct Mvhd {
     pub next_track_id: u32,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "tkhd")]
 pub struct Tkhd {
@@ -129,7 +129,7 @@ pub struct Tkhd {
     pub track_height: u32,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Edit {
     pub track_duration: u32,
     pub media_time: u32,
@@ -152,7 +152,7 @@ impl AttrRead for Edit {
     }
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "elst")]
 pub struct Elst {
@@ -164,7 +164,7 @@ pub struct Elst {
     pub edit_list: Vec<Edit>,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "internal")]
 #[mp4(tag = "edts")]
 pub struct Edts {
@@ -173,7 +173,7 @@ pub struct Edts {
     pub edit_list: Elst,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "mdhd")]
 pub struct Mdhd {
@@ -189,7 +189,7 @@ pub struct Mdhd {
     pub quality: u16,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "internal")]
 #[mp4(tag = "minf")]
 pub struct Minf {
@@ -199,7 +199,7 @@ pub struct Minf {
     pub stbl: Stbl,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "internal")]
 #[mp4(tag = "mdia")]
 pub struct Mdia {
@@ -210,7 +210,7 @@ pub struct Mdia {
     pub minf: Minf,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "internal")]
 #[mp4(tag = "trak")]
 pub struct Trak {
@@ -221,7 +221,7 @@ pub struct Trak {
     pub mdia: Mdia,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "hdlr")]
 pub struct Hdlr {
@@ -236,7 +236,7 @@ pub struct Hdlr {
     pub component_name: RawString,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "internal")]
 #[mp4(tag = "udta")]
 pub struct Udta {
@@ -244,7 +244,7 @@ pub struct Udta {
     pub header: BoxHeader,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "url ")]
 pub struct DataReference {
@@ -255,7 +255,7 @@ pub struct DataReference {
     pub data: Vec<u8>,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "dref")]
 pub struct Dref {
@@ -267,7 +267,7 @@ pub struct Dref {
     pub drefs: Vec<DataReference>,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "internal")]
 #[mp4(tag = "dinf")]
 pub struct Dinf {
@@ -276,7 +276,7 @@ pub struct Dinf {
     pub dref: Dref,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 pub enum GeneralSampleDescription {
     #[mp4(tag = "mp4a")]
@@ -324,7 +324,7 @@ pub enum GeneralSampleDescription {
     },
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "stsd")]
 pub struct Stsd {
@@ -336,7 +336,7 @@ pub struct Stsd {
     pub sample_description_table: Vec<GeneralSampleDescription>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimeToSample {
     pub sample_count: u32,
     pub sample_duration: u32,
@@ -356,7 +356,7 @@ impl AttrRead for TimeToSample {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SampleToChunk {
     pub first_chunk: u32,
     pub samples_per_chunk: u32,
@@ -379,7 +379,7 @@ impl AttrRead for SampleToChunk {
     }
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "stts")]
 pub struct Stts {
@@ -391,7 +391,7 @@ pub struct Stts {
     pub time_to_sample_table: Vec<TimeToSample>,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "stsc")]
 pub struct Stsc {
@@ -403,7 +403,7 @@ pub struct Stsc {
     pub sample_to_chunk_table: Vec<SampleToChunk>,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "stsz")]
 pub struct Stsz {
@@ -416,7 +416,7 @@ pub struct Stsz {
     pub sample_size_table: Vec<u32>,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "stco")]
 pub struct Stco {
@@ -428,7 +428,7 @@ pub struct Stco {
     pub chunk_offset_table: Vec<u32>,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "sgpd")]
 pub struct Sgpd {
@@ -436,7 +436,7 @@ pub struct Sgpd {
     pub header: BoxHeader,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "sbgp")]
 pub struct Sbgp {
@@ -444,7 +444,7 @@ pub struct Sbgp {
     pub header: BoxHeader,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "internal")]
 #[mp4(tag = "stbl")]
 pub struct Stbl {
@@ -464,7 +464,7 @@ pub struct Sample {
     pub size: usize,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
 #[mp4(tag = "smhd")]
 pub struct Smhd {
@@ -476,7 +476,7 @@ pub struct Smhd {
     _reserved: u16,
 }
 
-#[derive(BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "internal")]
 #[mp4(tag = "moov")]
 pub struct Moov {
