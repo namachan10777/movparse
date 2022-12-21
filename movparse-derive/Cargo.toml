@@ -12,14 +12,14 @@ proc-macro = true
 tracing = ["dep:tracing", "movparse-box/tracing"]
 
 [dependencies]
-async-trait = "0.1.59"
-proc-macro2 = "1.0.47"
-quote = "1.0.21"
-syn = {version="1.0.105", features=["full", "extra-traits"]}
-tokio = { version = "1.23.0", features = ["io-util", "fs", "rt-multi-thread", "macros"] }
+async-trait = "0.1"
+proc-macro2 = "1"
+quote = "1"
+syn = {version="1.0", features=["full", "extra-traits"]}
+tokio = { version = "1", features = ["io-util", "fs", "rt-multi-thread", "macros"] }
 movparse-box = { path = "../movparse-box" }
-tracing = {version = "0.1.37", optional = true}
-itertools = "0.10.5"
+tracing = {version = "0.1", optional = true}
+itertools = "0.10"
 
 [dev-dependencies]
 async-trait = "0.1.59"
