@@ -217,7 +217,7 @@ pub struct Trak {
     #[mp4(header)]
     pub header: BoxHeader,
     pub tkhd: Tkhd,
-    pub edts: Edts,
+    pub edts: Option<Edts>,
     pub mdia: Mdia,
 }
 
