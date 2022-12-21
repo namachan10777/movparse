@@ -579,3 +579,22 @@ mod test {
         );
     }
 }
+
+pub struct UnknownBox {
+    pub header: BoxHeader,
+}
+
+#[async_trait::async_trait]
+impl BoxRead for UnknownBox {
+    fn acceptable_tag(_: [u8; 4]) -> bool {
+        true
+    }
+
+    async fn read_body<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        header: BoxHeader,
+        reader: &mut Reader<R>,
+    ) -> Result<Self, io::Error> {
+        reader.seek_from_current(header.body_size() as i64).await?;
+        Ok(Self { header })
+    }
+}

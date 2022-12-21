@@ -304,6 +304,11 @@ pub enum GeneralSampleDescription {
         data_size: u32,
         frame_per_samples: u16,
     },
+    #[mp4(tag = "sowt")]
+    Sowt {
+        #[mp4(header)]
+        header: BoxHeader,
+    },
     #[mp4(tag = "Hap1")]
     Hap1 {
         #[mp4(header)]
