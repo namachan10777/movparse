@@ -328,6 +328,18 @@ impl AttrRead for u16 {
 }
 
 #[async_trait::async_trait]
+impl AttrRead for u64 {
+    async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
+        reader: &mut Reader<R>,
+    ) -> io::Result<Self> {
+        let mut buf = [0u8; 8];
+        reader.read_exact(&mut buf[..]).await?;
+        let mut buf = io::Cursor::new(buf);
+        Ok(ReadBytesExt::read_u64::<BE>(&mut buf).unwrap())
+    }
+}
+
+#[async_trait::async_trait]
 impl AttrRead for u32 {
     async fn read_attr<R: AsyncRead + AsyncSeek + Unpin + Send>(
         reader: &mut Reader<R>,

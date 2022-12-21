@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
     let limit = file.metadata().await?.len();
     let mut reader = Reader::new(file, limit);
     let mp4 = movparse::quicktime::QuickTime::read(&mut reader).await?;
-    for (idx, sample) in mp4.moov.traks[0].samples().iter().enumerate() {
+    for (idx, sample) in mp4.moov.traks[0].samples()?.iter().enumerate() {
         let mut buf = Vec::new();
         buf.resize(sample.size, 0);
         reader.seek_from_start(sample.offset as u64).await?;

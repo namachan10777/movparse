@@ -430,6 +430,18 @@ pub struct Stco {
 
 #[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[mp4(boxtype = "leaf")]
+#[mp4(tag = "co64")]
+pub struct Co64 {
+    #[mp4(header)]
+    pub header: BoxHeader,
+    pub version: u8,
+    pub flags: [u8; 3],
+    pub number_of_entries: u32,
+    pub chunk_offset_table: Vec<u64>,
+}
+
+#[derive(Clone, BoxRead, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[mp4(boxtype = "leaf")]
 #[mp4(tag = "sgpd")]
 pub struct Sgpd {
     #[mp4(header)]
@@ -454,7 +466,8 @@ pub struct Stbl {
     pub stts: Stts,
     pub stsc: Stsc,
     pub stsz: Stsz,
-    pub stco: Stco,
+    pub stco: Option<Stco>,
+    pub co64: Option<Co64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -492,11 +505,38 @@ pub struct TrackMetadata {
     pub samples: Vec<Sample>,
 }
 
+impl From<&Stco> for Co64 {
+    fn from(stco: &Stco) -> Self {
+        Self {
+            header: stco.header,
+            version: stco.version,
+            flags: stco.flags,
+            number_of_entries: stco.number_of_entries,
+            chunk_offset_table: stco
+                .chunk_offset_table
+                .iter()
+                .map(|offset| *offset as u64)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SamplesError {
+    #[error("co64 or stco not found")]
+    Co64OrStcoNotFound,
+}
+
 impl Trak {
-    pub fn samples(&self) -> Vec<Sample> {
+    pub fn samples(&self) -> Result<Vec<Sample>, SamplesError> {
         let timescale = &self.mdia.mdhd.time_scale;
-        let chunk_offset_table = &self.mdia.minf.stbl.stco.chunk_offset_table;
         let sample_to_chunk_table = &self.mdia.minf.stbl.stsc.sample_to_chunk_table;
+        let co64 = match &self.mdia.minf.stbl.stco {
+            Some(stco) => Some(stco.into()),
+            None => self.mdia.minf.stbl.co64.clone(),
+        }
+        .ok_or(SamplesError::Co64OrStcoNotFound)?;
+        let chunk_offset_table = co64.chunk_offset_table;
         let _ = &self.mdia.minf.stbl.stsd.sample_description_table;
         let sample_size_table = &self.mdia.minf.stbl.stsz.sample_size_table;
         let time_to_sample_table = &self.mdia.minf.stbl.stts.time_to_sample_table;
@@ -545,7 +585,7 @@ impl Trak {
                 }
             }
         }
-        samples
+        Ok(samples)
     }
 }
 
