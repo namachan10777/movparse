@@ -17,7 +17,7 @@ use tokio::{
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct BoxHeader {
     pub id: [u8; 4],
-    pub size: u32,
+    pub size: u64,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -102,6 +102,17 @@ impl BoxHeader {
         reader.read_exact(&mut id).await?;
 
         let size = ReadBytesExt::read_u32::<BE>(&mut Cursor::new(size)).unwrap();
+        let size = if size == 0 {
+            // TODO: improve this code
+            // size == 0 is only allowed in toplevel section
+            (reader.remain() - 4) as u64
+        } else if size == 1 {
+            let mut size = [0u8; 8];
+            reader.read_exact(&mut size).await?;
+            ReadBytesExt::read_u64::<BE>(&mut Cursor::new(size)).unwrap()
+        } else {
+            size as u64
+        };
         if size < 8 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
